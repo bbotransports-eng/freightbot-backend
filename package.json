@@ -1,0 +1,22 @@
+{
+  "name": "freightbot-backend",
+  "version": "1.0.0",
+  "description": "FreightBot Pro - Backend BYOA API Trans.eu",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "crypto-js": "^4.2.0",
+    "winston": "^3.13.0",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
