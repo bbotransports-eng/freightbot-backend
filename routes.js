@@ -1,42 +1,56 @@
-require("dotenv").config();
 const express = require("express");
-const cors = require("cors");
-const logger = require("./logger");
+const router = express.Router();
+const { storeCredentials, removeCredentials, hasCredentials } = require("./credentialsVault");
+const { startBotForUser, stopBotForUser, runScanForUser, getOffersForUser, getBotLogsForUser, getBotStatus } = require("./scanJob");
 
-const app = express();
-const PORT = process.env.PORT || 3001;
+const IS_MOCK = process.env.MOCK_MODE === "true";
 
-app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL || "http://localhost:5173",
-    /\.lovable\.app$/,
-    "http://localhost:3000",
-    "http://localhost:5173",
-  ],
-  credentials: true,
-}));
-
-app.use(express.json());
-
-app.use((req, res, next) => {
-  logger.info(`${req.method} ${req.path}`);
-  next();
+router.post("/connect", async (req, res) => {
+  const { userId, bourseId, username, password, filters } = req.body;
+  if (!userId || !bourseId) {
+    return res.status(400).json({ error: "Champs manquants : userId, bourseId" });
+  }
+  if (!IS_MOCK && (!username || !password)) {
+    return res.status(400).json({ error: "Champs manquants : username, password" });
+  }
+  if (!IS_MOCK) {
+    storeCredentials(userId, bourseId, username, password);
+  }
+  startBotForUser(userId, filters || {});
+  res.json({ success: true, message: `Compte ${bourseId} connecté`, mock: IS_MOCK });
 });
 
-const routes = require("./routes");
-app.use("/api", routes);
-
-app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
-    uptime: Math.round(process.uptime()),
-    env: process.env.NODE_ENV,
-    timestamp: new Date().toISOString(),
-  });
+router.post("/disconnect", (req, res) => {
+  const { userId, bourseId } = req.body;
+  removeCredentials(userId, bourseId);
+  stopBotForUser(userId);
+  res.json({ success: true, message: `Déconnecté de ${bourseId}` });
 });
 
-app.listen(PORT, () => {
-  logger.info(`FreightBot Backend démarré sur le port ${PORT}`);
+router.get("/status/:userId", (req, res) => {
+  const { userId } = req.params;
+  const connected = hasCredentials(userId, "transeu");
+  const botStat = getBotStatus(userId);
+  res.json({ userId, bourses: { transeu: { connected, ...botStat } } });
 });
 
-module.exports = app;
+router.get("/offers/:userId", (req, res) => {
+  const { userId } = req.params;
+  const { minScore = 0, maxResults = 50 } = req.query;
+  const data = getOffersForUser(userId);
+  const filtered = data.offers.filter(o => o.score >= parseInt(minScore)).slice(0, parseInt(maxResults));
+  res.json({ offers: filtered, stats: data.stats, lastUpdate: data.lastUpdate });
+});
+
+router.post("/scan/:userId", async (req, res) => {
+  const { userId } = req.params;
+  runScanForUser(userId, {}).catch(console.error);
+  res.json({ success: true, message: "Scan lancé" });
+});
+
+router.get("/logs/:userId", (req, res) => {
+  const { userId } = req.params;
+  res.json({ logs: getBotLogsForUser(userId) });
+});
+
+module.exports = router;
